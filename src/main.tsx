@@ -424,6 +424,7 @@ type ArchiveRow={id:string;year:number;month:number;event_name:string;storage_pa
 
 function Archive(){
   usePageMeta('Archive | Girl Up Conquistadors','Browse the Girl Up Conquistadors digital archive by year, month, and event.');
+
   const [years,setYears]=useState<ArchiveYear[]>([]);
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState('');
@@ -434,83 +435,90 @@ function Archive(){
 
   useEffect(()=>{
     let alive=true;
+
     const load=async()=>{
       setLoading(true);
       setLoadError('');
 
-      if(!supabaseConfigured||!supabase){
+      const url=import.meta.env.VITE_SUPABASE_URL;
+      const key=import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      if(!url||!key){
         if(alive){
           setYears(DEMO_ARCHIVE);
           setLoading(false);
-          setLoadError('Supabase is not configured in this deployment. Showing the built-in preview.');
+          setLoadError('Supabase environment variables are missing from this deployment.');
         }
         return;
       }
 
-      const {data,error}=await supabase
-        .from('archive_images')
-        .select('id,year,month,event_name,storage_path,public_url,caption,created_at')
-        .order('year',{ascending:false})
-        .order('month',{ascending:false})
-        .order('created_at',{ascending:true});
+      try{
+        const response=await fetch(
+          `${url}/rest/v1/archive_images?select=id,year,month,event_name,storage_path,public_url,caption&order=year.desc,month.desc`,
+          {
+            headers:{
+              apikey:key,
+              Authorization:`Bearer ${key}`
+            }
+          }
+        );
 
-      if(error){
+        const raw=await response.text();
+
+        if(!response.ok){
+          throw new Error(`Archive API ${response.status}: ${raw}`);
+        }
+
+        const data=JSON.parse(raw) as ArchiveRow[];
+
+        const grouped=new Map<string,ArchiveYear>();
+
+        for(const row of data){
+          const ys=String(row.year);
+          const ms=new Date(2000,Number(row.month)-1,1).toLocaleDateString('en-IN',{month:'long'});
+
+          let y=grouped.get(ys);
+          if(!y){
+            y={year:ys,months:[]};
+            grouped.set(ys,y);
+          }
+
+          let m=y.months.find(v=>v.month===ms);
+          if(!m){
+            m={month:ms,events:[]};
+            y.months.push(m);
+          }
+
+          const id=row.event_name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+
+          let ev=m.events.find(v=>v.id===id);
+          if(!ev){
+            ev={id,name:row.event_name,images:[]};
+            m.events.push(ev);
+          }
+
+          const src=String(row.public_url||'');
+          if(src){
+            ev.images.push({
+              id:String(row.id),
+              src,
+              alt:row.caption||`${row.event_name} archive image`
+            });
+          }
+        }
+
+        const live=Array.from(grouped.values()).sort((a,b)=>Number(b.year)-Number(a.year));
+
+        if(alive){
+          setYears(live);
+          setLoading(false);
+        }
+      }catch(error){
         if(alive){
           setYears([]);
           setLoading(false);
-          setLoadError(`Could not load the live archive: ${error.message}`);
+          setLoadError(error instanceof Error ? error.message : 'Could not load the live archive.');
         }
-        return;
-      }
-
-      const grouped=new Map<string,ArchiveYear>();
-
-      for(const row of (data||[])){
-        const ys=String(row.year);
-        const ms=new Date(2000,Number(row.month)-1,1).toLocaleDateString('en-IN',{month:'long'});
-
-        let y=grouped.get(ys);
-        if(!y){
-          y={year:ys,months:[]};
-          grouped.set(ys,y);
-        }
-
-        let m=y.months.find(v=>v.month===ms);
-        if(!m){
-          m={month:ms,events:[]};
-          y.months.push(m);
-        }
-
-        const id=row.event_name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g,'-')
-          .replace(/(^-|-$)/g,'');
-
-        let ev=m.events.find(v=>v.id===id);
-        if(!ev){
-          ev={id,name:row.event_name,images:[]};
-          m.events.push(ev);
-        }
-
-        let src=String(row.public_url||'');
-        if(!src && row.storage_path){
-          src=supabase.storage.from('guc-archive').getPublicUrl(row.storage_path).data.publicUrl;
-        }
-
-        if(src){
-          ev.images.push({
-            id:String(row.id),
-            src,
-            alt:row.caption||`${row.event_name} archive image`
-          });
-        }
-      }
-
-      const live=Array.from(grouped.values()).sort((a,b)=>Number(b.year)-Number(a.year));
-
-      if(alive){
-        setYears(live);
-        setLoading(false);
       }
     };
 
@@ -537,6 +545,7 @@ function Archive(){
         <h1>{ev?.name||'Event'}</h1>
         <p><button className="crumb-btn" onClick={()=>setEvent(null)}>â† Back to {event.month}</button></p>
       </div>
+
       <section className="section">
         <div className="wrap">
           {loadError&&<div className="alert warning">{loadError}</div>}
@@ -551,8 +560,11 @@ function Archive(){
           </div>
         </div>
       </section>
-      {lightbox&&<Modal onClose={()=>setLightbox(null)}><img className="lightbox-img" src={lightbox} alt="Archive enlargement"/></Modal>}
-    </main>
+
+      {lightbox&&<Modal onClose={()=>setLightbox(null)}>
+        <img className="lightbox-img" src={lightbox} alt="Archive enlargement"/>
+      </Modal>}
+    </main>;
   }
 
   if(month){
@@ -565,6 +577,7 @@ function Archive(){
         <h1>{month.month}</h1>
         <p><button className="crumb-btn" onClick={()=>setMonth(null)}>â† Back to {month.year}</button></p>
       </div>
+
       <section className="section">
         <div className="wrap archive-folders">
           {mo?.events.map(ev=><button key={ev.id} className="folder-card" onClick={()=>setEvent({year:month.year,month:month.month,event:ev.id})}>
@@ -576,7 +589,7 @@ function Archive(){
           {!mo?.events.length&&<EmptyState text="No events have been filed for this month."/>}
         </div>
       </section>
-    </main>
+    </main>;
   }
 
   const currentYear=year&&years.find(y=>y.year===year);
@@ -592,6 +605,7 @@ function Archive(){
       <div className="wrap">
         {loadError&&<div className="alert warning">{loadError}</div>}
         {!years.length&&!loadError&&<EmptyState text="No archive images have been uploaded yet."/>}
+
         {!!years.length&&<div className="archive-folders">
           {year===null
             ? years.map(y=><button key={y.year} className="folder-card year" onClick={()=>{setYear(y.year);setMonth(null)}}>
@@ -626,7 +640,7 @@ function Archive(){
         <Link to="/admin" className="btn btn-primary">Open admin â†—</Link>
       </div>
     </section>
-  </main>
+  </main>;
 }
 function ArchiveUploader(){
   const [year,setYear]=useState(String(new Date().getFullYear())),[month,setMonth]=useState(String(new Date().getMonth()+1)),[eventName,setEventName]=useState(''),[caption,setCaption]=useState(''),[files,setFiles]=useState<File[]>([]),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false);
@@ -714,6 +728,7 @@ class ErrorBoundary extends React.Component<{children:React.ReactNode},{hasError
 function App(){return <Layout><Routes><Route path="/" element={<Home/>}/><Route path="/about" element={<About/>}/><Route path="/join" element={<Join/>}/><Route path="/events" element={<EventsPage/>}/><Route path="/donate" element={<Donate/>}/><Route path="/archive" element={<Archive/>}/><Route path="/admin" element={<Admin/>}/><Route path="*" element={<NotFound/>}/></Routes></Layout>}
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><ErrorBoundary><App/></ErrorBoundary></BrowserRouter></React.StrictMode>);
+
 
 
 
