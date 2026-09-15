@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
@@ -7,6 +7,7 @@ import { ARCHIVE as DEMO_ARCHIVE } from './data/archive';
 import { SITE } from './config';
 import { supabase, supabaseConfigured } from './lib/supabase';
 import './styles.css';
+import './performance.css';
 
 function usePageMeta(title: string, description: string) {
   useEffect(() => {
@@ -26,98 +27,209 @@ function CustomCursor(){
   useEffect(()=>{
     if(!window.matchMedia('(pointer:fine)').matches) return;
     const el=root.current; if(!el) return;
+
     const html=document.documentElement;
-    let raf=0, x=0, y=0, nextX=0, nextY=0;
+    html.classList.add('cursor-enabled');
+
+    let x=window.innerWidth/2;
+    let y=window.innerHeight/2;
+    let targetX=x;
+    let targetY=y;
+    let raf=0;
+
     const render=()=>{
-      x=nextX; y=nextY;
+      const dx=targetX-x;
+      const dy=targetY-y;
+      x += dx * 0.24;
+      y += dy * 0.24;
+
       el.style.transform=`translate3d(${x}px,${y}px,0)`;
-      raf=0;
+
+      if(Math.abs(dx)+Math.abs(dy)>0.05){
+        raf=requestAnimationFrame(render);
+      }else{
+        raf=0;
+      }
     };
-    const move=(e:MouseEvent)=>{
-      nextX=e.clientX; nextY=e.clientY;
-      html.style.setProperty('--mouse-x',((e.clientX/window.innerWidth-.5)*2).toFixed(3));
-      html.style.setProperty('--mouse-y',((e.clientY/window.innerHeight-.5)*2).toFixed(3));
+
+    const move=(e:PointerEvent)=>{
+      targetX=e.clientX;
+      targetY=e.clientY;
       if(!raf) raf=requestAnimationFrame(render);
-      const target=e.target instanceof Element ? e.target : null;
-      html.classList.toggle('cursor-hover', !!target?.closest('a,button,input,textarea,select,[role=button]'));
     };
-    const down=()=>html.classList.add('cursor-pressed');
-    const up=()=>html.classList.remove('cursor-pressed');
-    window.addEventListener('mousemove',move,{passive:true});
-    window.addEventListener('mousedown',down,{passive:true});
-    window.addEventListener('mouseup',up,{passive:true});
+
+    const over=(e:PointerEvent)=>{
+      const target=e.target instanceof Element ? e.target : null;
+      el.classList.toggle('is-hover', !!target?.closest('a,button,input,textarea,select,[role=button]'));
+    };
+
+    const down=()=>el.classList.add('is-pressed');
+    const up=()=>el.classList.remove('is-pressed');
+
+    window.addEventListener('pointermove',move,{passive:true});
+    window.addEventListener('pointerover',over,{passive:true});
+    window.addEventListener('pointerdown',down,{passive:true});
+    window.addEventListener('pointerup',up,{passive:true});
+
     return()=>{
       cancelAnimationFrame(raf);
-      window.removeEventListener('mousemove',move);
-      window.removeEventListener('mousedown',down);
-      window.removeEventListener('mouseup',up);
-      html.classList.remove('cursor-hover','cursor-pressed');
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerover',over);
+      window.removeEventListener('pointerdown',down);
+      window.removeEventListener('pointerup',up);
+      html.classList.remove('cursor-enabled');
     };
   },[]);
-  return <div ref={root} className="cursor-system" aria-hidden="true"><div className="cursor-ring"/><div className="cursor-dot"/><div className="cursor-crosshair"/></div>
-}
 
+  return <div ref={root} className="cursor-system" aria-hidden="true">
+    <div className="cursor-ring"/>
+    <div className="cursor-dot"/>
+    <div className="cursor-crosshair"/>
+  </div>
+}
 function ScrollParallax(){
   useEffect(()=>{
-    const root=document.documentElement;
+    const root=document.querySelector('.ambient-art') as HTMLElement|null;
+    if(!root) return;
+
     let raf=0;
-    const updateScroll=()=>{
+
+    const update=()=>{
       root.style.setProperty('--scroll-y',`${window.scrollY}px`);
       raf=0;
     };
-    const onScroll=()=>{if(!raf) raf=requestAnimationFrame(updateScroll)};
+
+    const onScroll=()=>{
+      if(!raf) raf=requestAnimationFrame(update);
+    };
+
     window.addEventListener('scroll',onScroll,{passive:true});
-    updateScroll();
-    return()=>{window.removeEventListener('scroll',onScroll);cancelAnimationFrame(raf)};
+    update();
+
+    return()=>{
+      window.removeEventListener('scroll',onScroll);
+      cancelAnimationFrame(raf);
+    };
   },[]);
+
   return null;
 }
+function Particles(){
+  const canvasRef=useRef<HTMLCanvasElement|null>(null);
 
-function Particles() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    let raf = 0;
-    let particles: {x:number;y:number;vx:number;vy:number;r:number}[] = [];
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const coarse = window.matchMedia('(pointer:coarse)');
-    const fpsInterval = 1000/30;
-    let lastFrame=0;
-    const resize = () => {
-      canvas.width = Math.floor(window.innerWidth * dpr);
-      canvas.height = Math.floor(window.innerHeight * dpr);
-      canvas.style.width = '100%'; canvas.style.height = '100%';
+  useEffect(()=>{
+    const canvas=canvasRef.current;
+    if(!canvas) return;
+
+    const ctx=canvas.getContext('2d',{alpha:true});
+    if(!ctx) return;
+
+    const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const coarse=window.matchMedia('(pointer:coarse)').matches;
+    if(reduce){
+      return;
+    }
+
+    let raf=0;
+    let last=0;
+    let width=0;
+    let height=0;
+    let dpr=1;
+
+    type Particle={x:number;y:number;vx:number;vy:number;r:number};
+    let particles:Particle[]=[];
+
+    const resize=()=>{
+      width=window.innerWidth;
+      height=window.innerHeight;
+      dpr=Math.min(window.devicePixelRatio||1,1.25);
+
+      canvas.width=Math.round(width*dpr);
+      canvas.height=Math.round(height*dpr);
+      canvas.style.width='100%';
+      canvas.style.height='100%';
+
       ctx.setTransform(dpr,0,0,dpr,0,0);
-      const count = motion.matches ? 0 : Math.min(coarse.matches ? 20 : 42, Math.floor(window.innerWidth / 28));
-      particles = Array.from({length: count}, () => ({ x: Math.random()*innerWidth, y: Math.random()*innerHeight, vx:(Math.random()-.5)*.18, vy:(Math.random()-.5)*.18, r:Math.random()*1.3+.35 }));
+
+      const maxCount=coarse ? 16 : 26;
+      const count=Math.min(maxCount,Math.max(12,Math.floor(width/55)));
+
+      particles=Array.from({length:count},()=>({
+        x:Math.random()*width,
+        y:Math.random()*height,
+        vx:(Math.random()-.5)*0.12,
+        vy:(Math.random()-.5)*0.12,
+        r:Math.random()*1.15+0.45
+      }));
     };
-    resize(); window.addEventListener('resize', resize, {passive:true});
-    const tick = (now:number) => {
-      if(now-lastFrame<fpsInterval){raf=requestAnimationFrame(tick);return;}
-      lastFrame=now;
-      ctx.clearRect(0,0,innerWidth,innerHeight);
+
+    resize();
+
+    let resizeTimer=0;
+    const onResize=()=>{
+      window.clearTimeout(resizeTimer);
+      resizeTimer=window.setTimeout(resize,120);
+    };
+
+    window.addEventListener('resize',onResize,{passive:true});
+
+    const tick=(now:number)=>{
+      if(now-last<1000/24){
+        raf=requestAnimationFrame(tick);
+        return;
+      }
+      last=now;
+
+      ctx.clearRect(0,0,width,height);
+
       for(let i=0;i<particles.length;i++){
         const p=particles[i];
-        p.x += p.vx; p.y += p.vy;
-        if(p.x<0||p.x>innerWidth)p.vx*=-1; if(p.y<0||p.y>innerHeight)p.vy*=-1;
-        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle='rgba(255,75,150,.42)'; ctx.fill();
+
+        p.x+=p.vx;
+        p.y+=p.vy;
+
+        if(p.x<0 || p.x>width) p.vx*=-1;
+        if(p.y<0 || p.y>height) p.vy*=-1;
+
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,75,150,.38)';
+        ctx.fill();
+
         for(let j=i+1;j<particles.length;j++){
-          const q=particles[j], dx=p.x-q.x, dy=p.y-q.y, d2=dx*dx+dy*dy;
-          if(d2<6400){const alpha=.07*(1-Math.sqrt(d2)/80);ctx.strokeStyle=`rgba(255,45,95,${alpha})`;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();}
+          const q=particles[j];
+          const dx=p.x-q.x;
+          const dy=p.y-q.y;
+          const d2=dx*dx+dy*dy;
+
+          if(d2<4900){
+            const distance=Math.sqrt(d2);
+            const alpha=0.045*(1-distance/70);
+
+            ctx.strokeStyle=`rgba(255,45,95,${alpha})`;
+            ctx.lineWidth=1;
+            ctx.beginPath();
+            ctx.moveTo(p.x,p.y);
+            ctx.lineTo(q.x,q.y);
+            ctx.stroke();
+          }
         }
       }
+
       raf=requestAnimationFrame(tick);
     };
-    raf=requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
-  }, []);
-  return <canvas className="particles" ref={canvasRef} aria-hidden="true" />;
-}
 
+    raf=requestAnimationFrame(tick);
+
+    return()=>{
+      cancelAnimationFrame(raf);
+      window.clearTimeout(resizeTimer);
+      window.removeEventListener('resize',onResize);
+    };
+  },[]);
+
+  return <canvas className="particles" ref={canvasRef} aria-hidden="true"/>;
+}
 function Layout({children}:{children:React.ReactNode}) {
   const [open,setOpen]=useState(false);
   const location=useLocation();
@@ -143,7 +255,7 @@ function Home(){
     hero.addEventListener('pointermove',onMove,{passive:true});
     return()=>hero.removeEventListener('pointermove',onMove);
   },[]);
-  return <><main><section ref={heroRef} className="hero home-hero-reveal"><div className="hero-reveal-art"/><div className="hero-orb orb-a"/><div className="hero-orb orb-b"/><div className="hero-slab slab-a"/><div className="hero-slab slab-b"/><div className="hero-rings"/><div className="hero-wordmark">GUC//01</div><div className="wrap hero-inner"><div className="hero-copy"><span className="kicker">YOUTH-LED �?� IMPACT-DRIVEN �?� UNAPOLOGETIC</span><h1>Make room.<br/><em>Take space.</em><br/>Move the future.</h1><p>{SITE.tagline} We build practical pathways for girls and young women to learn, lead, organise, and change the rooms around them.</p><div className="hero-actions"><Link to="/join" className="btn btn-primary">Join the movement ?</Link><Link to="/about" className="btn btn-ghost">Our story</Link></div><div className="micro-proof"><span>01 / education</span><span>02 / leadership</span><span>03 / community</span></div></div><div className="hero-card" data-parallax="0.08"><div className="hero-card-line"><span>FIELD NOTE 026</span><span>LIVE / ACTION</span></div><div className="hero-card-number">+<span>18</span></div><p>community actions scheduled across the next two quarters.</p><div className="scanline"/></div></div></section>
+  return <><main><section ref={heroRef} className="hero home-hero-reveal"><div className="hero-reveal-art"/><div className="hero-orb orb-a"/><div className="hero-orb orb-b"/><div className="hero-slab slab-a"/><div className="hero-slab slab-b"/><div className="hero-rings"/><div className="hero-wordmark">GUC//01</div><div className="wrap hero-inner"><div className="hero-copy"><span className="kicker">YOUTH-LED ï¿½?ï¿½ IMPACT-DRIVEN ï¿½?ï¿½ UNAPOLOGETIC</span><h1>Make room.<br/><em>Take space.</em><br/>Move the future.</h1><p>{SITE.tagline} We build practical pathways for girls and young women to learn, lead, organise, and change the rooms around them.</p><div className="hero-actions"><Link to="/join" className="btn btn-primary">Join the movement ?</Link><Link to="/about" className="btn btn-ghost">Our story</Link></div><div className="micro-proof"><span>01 / education</span><span>02 / leadership</span><span>03 / community</span></div></div><div className="hero-card" data-parallax="0.08"><div className="hero-card-line"><span>FIELD NOTE 026</span><span>LIVE / ACTION</span></div><div className="hero-card-number">+<span>18</span></div><p>community actions scheduled across the next two quarters.</p><div className="scanline"/></div></div></section>
 <section className="marquee"><div>EDUCATION <b>?</b> LEADERSHIP <b>?</b> SAFETY <b>?</b> DIGNITY <b>?</b> OPPORTUNITY <b>?</b> EDUCATION <b>?</b></div></section>
 <section className="section"><div className="wrap stats-grid"><div className="stat"><strong>04</strong><span>core programme tracks</span></div><div className="stat"><strong>12+</strong><span>community partners, growing</span></div><div className="stat"><strong>1</strong><span>standard: girls deserve more</span></div></div></section>
 <section className="section section-tight"><div className="wrap split"><SectionHeader eyebrow="01 / WHY GUC" title="Not charity theatre. Capacity, confidence, and collective action." copy="We focus on tangible interventions that let girls build skills, access resources, and become decision-makers in their own communities."/><div className="manifesto"><div><span>A</span><h3>Agency</h3><p>Tools to speak, decide, negotiate, and lead.</p></div><div><span>B</span><h3>Access</h3><p>Education, mentors, information, and opportunity.</p></div><div><span>C</span><h3>Action</h3><p>Campaigns that move from conversation to measurable change.</p></div></div></div></section>
@@ -153,9 +265,9 @@ function Home(){
 
 function EventCard({ev}:{ev:GucEvent}){const date=new Date(ev.date+'T12:00:00');return <div className="event-card"><div className="event-date"><span>{date.toLocaleDateString('en-IN',{month:'short'})}</span><strong>{date.getDate()}</strong><span>{date.getFullYear()}</span></div><div><span className="tag">{ev.category}</span><h3>{ev.title}</h3><p>{ev.overview}</p><small>{ev.location}</small></div></div>}
 
-function About(){usePageMeta('About | Girl Up Conquistadors','Mission, history, values, and contact location for Girl Up Conquistadors.');return <main className="page"><div className="wrap page-hero"><span className="eyebrow">ABOUT / GUC</span><h1>We believe girls are not a �?�future constituency�?�. They are the present.</h1><p>GUC exists to turn that premise into infrastructure: skills, peer networks, mentors, safe spaces, and community-led action.</p></div><section className="section"><div className="wrap split"><SectionHeader eyebrow="MISSION" title="Build power that lasts beyond one campaign." copy="Our work connects learning with action. A workshop should lead somewhere. A campaign should leave skills behind. And every programme should make it easier for girls to claim space in rooms that were not designed with them in mind."/><div className="big-quote">�?�The objective is not to create louder girls. It is to create girls who know they do not need permission.�?�</div></div></section><section className="section dark-band"><div className="wrap"><SectionHeader eyebrow="HISTORY / A LIVING TIMELINE" title="From a small circle to a civic platform." copy="Use the timeline below as the editable narrative of GUC's growth."/><div className="timeline"><Timeline year="01" title="The first circle" text="A small group begins by pooling skills, contacts, and a willingness to do the unglamorous work."/><Timeline year="02" title="Programmes emerge" text="Education, leadership, safety, and community action become repeatable programme tracks."/><Timeline year="03" title="Community network" text="Partners, mentors, volunteers, and young organisers turn individual efforts into a wider network."/><Timeline year="04" title="The next chapter" text="GUC scales the archive, event programme, and volunteer base without losing the human core."/></div></div></section><section className="section"><div className="wrap"><SectionHeader eyebrow="LOCATION" title="Meetings happen somewhere. Configure the exact pin before launch." copy="The embedded map below is deliberately a placeholder so a real address is never fabricated."/><div className="map-placeholder"><div className="map-grid"/><div className="map-pin">?</div><div className="map-label"><strong>{SITE.locationLabel}</strong><span>{SITE.locationAddress}</span></div></div></div></section><section className="section"><div className="wrap cards-3"><Info title="Dignity first" text="People are not programme outputs. Every interaction should respect autonomy, privacy, and choice."/><Info title="Youth-led" text="Young people help set priorities, run activities, and shape what gets built next."/><Info title="Evidence + imagination" text="We value measurement, but we refuse to confuse neat dashboards with actual change."/></div></section></main>}
+function About(){usePageMeta('About | Girl Up Conquistadors','Mission, history, values, and contact location for Girl Up Conquistadors.');return <main className="page"><div className="wrap page-hero"><span className="eyebrow">ABOUT / GUC</span><h1>We believe girls are not a ï¿½?ï¿½future constituencyï¿½?ï¿½. They are the present.</h1><p>GUC exists to turn that premise into infrastructure: skills, peer networks, mentors, safe spaces, and community-led action.</p></div><section className="section"><div className="wrap split"><SectionHeader eyebrow="MISSION" title="Build power that lasts beyond one campaign." copy="Our work connects learning with action. A workshop should lead somewhere. A campaign should leave skills behind. And every programme should make it easier for girls to claim space in rooms that were not designed with them in mind."/><div className="big-quote">ï¿½?ï¿½The objective is not to create louder girls. It is to create girls who know they do not need permission.ï¿½?ï¿½</div></div></section><section className="section dark-band"><div className="wrap"><SectionHeader eyebrow="HISTORY / A LIVING TIMELINE" title="From a small circle to a civic platform." copy="Use the timeline below as the editable narrative of GUC's growth."/><div className="timeline"><Timeline year="01" title="The first circle" text="A small group begins by pooling skills, contacts, and a willingness to do the unglamorous work."/><Timeline year="02" title="Programmes emerge" text="Education, leadership, safety, and community action become repeatable programme tracks."/><Timeline year="03" title="Community network" text="Partners, mentors, volunteers, and young organisers turn individual efforts into a wider network."/><Timeline year="04" title="The next chapter" text="GUC scales the archive, event programme, and volunteer base without losing the human core."/></div></div></section><section className="section"><div className="wrap"><SectionHeader eyebrow="LOCATION" title="Meetings happen somewhere. Configure the exact pin before launch." copy="The embedded map below is deliberately a placeholder so a real address is never fabricated."/><div className="map-placeholder"><div className="map-grid"/><div className="map-pin">?</div><div className="map-label"><strong>{SITE.locationLabel}</strong><span>{SITE.locationAddress}</span></div></div></div></section><section className="section"><div className="wrap cards-3"><Info title="Dignity first" text="People are not programme outputs. Every interaction should respect autonomy, privacy, and choice."/><Info title="Youth-led" text="Young people help set priorities, run activities, and shape what gets built next."/><Info title="Evidence + imagination" text="We value measurement, but we refuse to confuse neat dashboards with actual change."/></div></section></main>}
 function Timeline({year,title,text}:{year:string;title:string;text:string}){return <div className="timeline-item"><span>{year}</span><div><h3>{title}</h3><p>{text}</p></div></div>}
-function Info({title,text}:{title:string;text:string}){return <article className="info-card"><span className="card-num">×</span><h3>{title}</h3><p>{text}</p></article>}
+function Info({title,text}:{title:string;text:string}){return <article className="info-card"><span className="card-num">Ã—</span><h3>{title}</h3><p>{text}</p></article>}
 function Join() {
   usePageMeta(
     'Join Us | Girl Up Conquistadors',
@@ -290,8 +402,8 @@ function Join() {
 
                 <select name="availability" required>
                   <option value="">Choose one</option>
-                  <option>2�??4 hrs / month</option>
-                  <option>5�??8 hrs / month</option>
+                  <option>2ï¿½??4 hrs / month</option>
+                  <option>5ï¿½??8 hrs / month</option>
                   <option>8+ hrs / month</option>
                   <option>Project based</option>
                 </select>
@@ -370,7 +482,7 @@ function Join() {
               disabled={status === 'loading'}
             >
               {status === 'loading'
-                ? 'Sending�?�'
+                ? 'Sendingï¿½?ï¿½'
                 : 'Submit application ?'}
             </button>
 
@@ -411,11 +523,11 @@ function Join() {
 }
 function Field({label,name,type='text',required=false}:{label:string;name:string;type?:string;required?:boolean}){return <label><span>{label}{required?' *':''}</span><input name={name} type={type} required={required}/></label>}
 
-function EventsPage(){usePageMeta('Events | Girl Up Conquistadors','Interactive calendar of Girl Up Conquistadors planned events.');const [cursor,setCursor]=useState(new Date());const [selected,setSelected]=useState<GucEvent|null>(null);const y=cursor.getFullYear(),m=cursor.getMonth();const monthName=cursor.toLocaleDateString('en-IN',{month:'long',year:'numeric'});const first=new Date(y,m,1).getDay();const days=new Date(y,m+1,0).getDate();const cells=Array.from({length:Math.ceil((first+days)/7)*7},(_,i)=>{const d=i-first+1;return d>0&&d<=days?d:null});const map=useMemo(()=>new Map(EVENTS.map(e=>[e.date,e])),[]);return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">EVENT GRID / CALENDAR</span><h1>Dates with intent.</h1><p>Choose a day with an event marker. A compact detail window gives the overview and tentative location.</p></div><section className="section"><div className="wrap calendar-shell"><div className="calendar-head"><button className="icon-btn" onClick={()=>setCursor(new Date(y,m-1,1))} aria-label="Previous month">�?�</button><h2>{monthName}</h2><div className="calendar-head-actions"><button className="ghost-btn" onClick={()=>setCursor(new Date())}>Today</button><button className="icon-btn" onClick={()=>setCursor(new Date(y,m+1,1))} aria-label="Next month">�?�</button></div></div><div className="week-row">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><span key={d}>{d}</span>)}</div><div className="calendar-grid">{cells.map((day,i)=>{const dateStr=day?`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`:'';const ev=day?map.get(dateStr):undefined;return <button key={i} className={day?'day-cell':'day-cell empty'} disabled={!day} onClick={()=>ev&&setSelected(ev)}>{day&&<><span className="day-num">{day}</span>{ev&&<span className="event-dot"/>}{ev&&<span className="day-title">{ev.title}</span>}</>}</button>})}</div></div></section>{selected&&<Modal onClose={()=>setSelected(null)}><EventModal ev={selected}/></Modal>}</main>}
+function EventsPage(){usePageMeta('Events | Girl Up Conquistadors','Interactive calendar of Girl Up Conquistadors planned events.');const [cursor,setCursor]=useState(new Date());const [selected,setSelected]=useState<GucEvent|null>(null);const y=cursor.getFullYear(),m=cursor.getMonth();const monthName=cursor.toLocaleDateString('en-IN',{month:'long',year:'numeric'});const first=new Date(y,m,1).getDay();const days=new Date(y,m+1,0).getDate();const cells=Array.from({length:Math.ceil((first+days)/7)*7},(_,i)=>{const d=i-first+1;return d>0&&d<=days?d:null});const map=useMemo(()=>new Map(EVENTS.map(e=>[e.date,e])),[]);return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">EVENT GRID / CALENDAR</span><h1>Dates with intent.</h1><p>Choose a day with an event marker. A compact detail window gives the overview and tentative location.</p></div><section className="section"><div className="wrap calendar-shell"><div className="calendar-head"><button className="icon-btn" onClick={()=>setCursor(new Date(y,m-1,1))} aria-label="Previous month">ï¿½?ï¿½</button><h2>{monthName}</h2><div className="calendar-head-actions"><button className="ghost-btn" onClick={()=>setCursor(new Date())}>Today</button><button className="icon-btn" onClick={()=>setCursor(new Date(y,m+1,1))} aria-label="Next month">ï¿½?ï¿½</button></div></div><div className="week-row">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><span key={d}>{d}</span>)}</div><div className="calendar-grid">{cells.map((day,i)=>{const dateStr=day?`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`:'';const ev=day?map.get(dateStr):undefined;return <button key={i} className={day?'day-cell':'day-cell empty'} disabled={!day} onClick={()=>ev&&setSelected(ev)}>{day&&<><span className="day-num">{day}</span>{ev&&<span className="event-dot"/>}{ev&&<span className="day-title">{ev.title}</span>}</>}</button>})}</div></div></section>{selected&&<Modal onClose={()=>setSelected(null)}><EventModal ev={selected}/></Modal>}</main>}
 function EventModal({ev}:{ev:GucEvent}){const d=new Date(ev.date+'T12:00:00');return <div className="modal-event"><span className="eyebrow">{ev.category}</span><h2>{ev.title}</h2><div className="modal-meta"><span>{d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span><span>{ev.location}</span></div><p>{ev.overview}</p></div>}
-function Modal({children,onClose}:{children:React.ReactNode;onClose:()=>void}){return <div className="modal-backdrop" onMouseDown={e=>{if(e.currentTarget===e.target)onClose()}}><div className="modal"><button className="modal-close" onClick={onClose} aria-label="Close">×</button>{children}</div></div>}
+function Modal({children,onClose}:{children:React.ReactNode;onClose:()=>void}){return <div className="modal-backdrop" onMouseDown={e=>{if(e.currentTarget===e.target)onClose()}}><div className="modal"><button className="modal-close" onClick={onClose} aria-label="Close">Ã—</button>{children}</div></div>}
 
-function Donate(){usePageMeta('Donate | Girl Up Conquistadors','Support Girl Up Conquistadors through UPI or bank transfer.');const [qr,setQr]=useState('');const [copied,setCopied]=useState('');useEffect(()=>{QRCode.toDataURL(SITE.donation.upiUri,{margin:2,width:480,errorCorrectionLevel:'H'}).then(setQr);},[]);const copy=async(v:string,key:string)=>{await navigator.clipboard?.writeText(v);setCopied(key);setTimeout(()=>setCopied(''),1800)};return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">DONATE / FUND THE WORK</span><h1>Make the next action possible.</h1><p>Every contribution helps fund programme materials, venue access, dignity supplies, transport, documentation, and the boring infrastructure that turns ideas into work.</p></div><section className="section"><div className="wrap donate-layout"><div className="qr-card"><div className="qr-frame"><div className="qr-grid"/>{qr&&<img src={qr} alt="Donation QR code"/>}<span className="qr-corner top-left"/><span className="qr-corner top-right"/><span className="qr-corner bottom-left"/><span className="qr-corner bottom-right"/></div><div className="qr-caption"><span>SCAN / PAY</span><strong>{SITE.donation.upiId}</strong></div><button className="copy-btn" onClick={()=>copy(SITE.donation.upiId,'upi')}>{copied==='upi'?'Copied �?':'Copy UPI ID'}</button></div><div className="bank-card"><span className="eyebrow">BANK TRANSFER</span><h2>Direct support, no theatre.</h2><BankLine label="Account name" value={SITE.donation.accountName}/><BankLine label="Bank" value={SITE.donation.bankName}/><BankLine label="Account number" value={SITE.donation.accountNumber} copy={()=>copy(SITE.donation.accountNumber,'account')}/><BankLine label="IFSC" value={SITE.donation.ifsc} copy={()=>copy(SITE.donation.ifsc,'ifsc')}/><BankLine label="Branch" value={SITE.donation.branch}/>{copied==='account'||copied==='ifsc'?<div className="copy-toast">Copied.</div>:null}<div className="alert warning">These are configuration values. Replace them with the NGO's verified donation details before launch.</div></div></div></section></main>}
+function Donate(){usePageMeta('Donate | Girl Up Conquistadors','Support Girl Up Conquistadors through UPI or bank transfer.');const [qr,setQr]=useState('');const [copied,setCopied]=useState('');useEffect(()=>{QRCode.toDataURL(SITE.donation.upiUri,{margin:2,width:480,errorCorrectionLevel:'H'}).then(setQr);},[]);const copy=async(v:string,key:string)=>{await navigator.clipboard?.writeText(v);setCopied(key);setTimeout(()=>setCopied(''),1800)};return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">DONATE / FUND THE WORK</span><h1>Make the next action possible.</h1><p>Every contribution helps fund programme materials, venue access, dignity supplies, transport, documentation, and the boring infrastructure that turns ideas into work.</p></div><section className="section"><div className="wrap donate-layout"><div className="qr-card"><div className="qr-frame"><div className="qr-grid"/>{qr&&<img src={qr} alt="Donation QR code"/>}<span className="qr-corner top-left"/><span className="qr-corner top-right"/><span className="qr-corner bottom-left"/><span className="qr-corner bottom-right"/></div><div className="qr-caption"><span>SCAN / PAY</span><strong>{SITE.donation.upiId}</strong></div><button className="copy-btn" onClick={()=>copy(SITE.donation.upiId,'upi')}>{copied==='upi'?'Copied ï¿½?':'Copy UPI ID'}</button></div><div className="bank-card"><span className="eyebrow">BANK TRANSFER</span><h2>Direct support, no theatre.</h2><BankLine label="Account name" value={SITE.donation.accountName}/><BankLine label="Bank" value={SITE.donation.bankName}/><BankLine label="Account number" value={SITE.donation.accountNumber} copy={()=>copy(SITE.donation.accountNumber,'account')}/><BankLine label="IFSC" value={SITE.donation.ifsc} copy={()=>copy(SITE.donation.ifsc,'ifsc')}/><BankLine label="Branch" value={SITE.donation.branch}/>{copied==='account'||copied==='ifsc'?<div className="copy-toast">Copied.</div>:null}<div className="alert warning">These are configuration values. Replace them with the NGO's verified donation details before launch.</div></div></div></section></main>}
 function BankLine({label,value,copy}:{label:string;value:string;copy?:()=>void}){return <div className="bank-line"><span>{label}</span><div><strong>{value}</strong>{copy&&<button onClick={copy} className="mini-copy">copy</button>}</div></div>}
 
 type ArchiveImage={id:string;src:string;alt:string};
@@ -543,7 +655,7 @@ function Archive(){
       <div className="wrap page-hero compact">
         <span className="eyebrow">ARCHIVE / EVENT</span>
         <h1>{ev?.name||'Event'}</h1>
-        <p><button className="crumb-btn" onClick={()=>setEvent(null)}>← Back to {event.month}</button></p>
+        <p><button className="crumb-btn" onClick={()=>setEvent(null)}>â† Back to {event.month}</button></p>
       </div>
 
       <section className="section">
@@ -575,14 +687,14 @@ function Archive(){
       <div className="wrap page-hero compact">
         <span className="eyebrow">ARCHIVE / {month.year}</span>
         <h1>{month.month}</h1>
-        <p><button className="crumb-btn" onClick={()=>setMonth(null)}>← Back to {month.year}</button></p>
+        <p><button className="crumb-btn" onClick={()=>setMonth(null)}>â† Back to {month.year}</button></p>
       </div>
 
       <section className="section">
         <div className="wrap archive-folders">
           {mo?.events.map(ev=><button key={ev.id} className="folder-card" onClick={()=>setEvent({year:month.year,month:month.month,event:ev.id})}>
             <span className="folder-tab"/>
-            <span className="folder-icon">▱</span>
+            <span className="folder-icon">â–±</span>
             <strong>{ev.name}</strong>
             <small>{ev.images.length} image{ev.images.length===1?'':'s'}</small>
           </button>)}
@@ -610,17 +722,17 @@ function Archive(){
           {year===null
             ? years.map(y=><button key={y.year} className="folder-card year" onClick={()=>{setYear(y.year);setMonth(null)}}>
                 <span className="folder-tab"/>
-                <span className="folder-icon">▱</span>
+                <span className="folder-icon">â–±</span>
                 <strong>{y.year}</strong>
                 <small>{y.months.length} month{y.months.length===1?'':'s'} filed</small>
               </button>)
             : <>
                 <div className="archive-back">
-                  <button className="crumb-btn" onClick={()=>setYear(null)}>← All years</button>
+                  <button className="crumb-btn" onClick={()=>setYear(null)}>â† All years</button>
                 </div>
                 {currentYear?.months.map(mo=><button key={mo.month} className="folder-card" onClick={()=>setMonth({year,month:mo.month})}>
                   <span className="folder-tab"/>
-                  <span className="folder-icon">▱</span>
+                  <span className="folder-icon">â–±</span>
                   <strong>{mo.month}</strong>
                   <small>{mo.events.length} event{mo.events.length===1?'':'s'}</small>
                 </button>)}
@@ -666,7 +778,7 @@ function ArchiveUploader(){
     }catch(e){setMsg(e instanceof Error?e.message:'Upload failed.')}finally{setBusy(false)}
   };
 
-  return <div className="uploader"><div className="form-row"><Field label="Year" name="archive-year" value={year} onChange={e=>setYear(e.target.value)}/><label><span>Month</span><select value={month} onChange={e=>setMonth(e.target.value)}>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{new Date(2000,i,1).toLocaleDateString('en-IN',{month:'long'})}</option>)}</select></label></div><label><span>Event name</span><input value={eventName} onChange={e=>setEventName(e.target.value)} placeholder="e.g. Community Kickoff"/></label><label><span>Caption (optional)</span><input value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Short description for all uploaded images"/></label><label className="dropzone"><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e=>setFiles(Array.from(e.target.files||[]))}/><span>DROP IMAGES OR CLICK</span><small>JPG / PNG / WEBP �?� 10 MB MAX</small></label>{files.length>0&&<div className="file-list">{files.map(f=><span key={f.name}>{f.name}</span>)}</div>}<button className="btn btn-primary" onClick={upload} disabled={busy}>{busy?'Uploading�?�':'Upload to archive'}</button>{msg&&<div className="alert">{msg}</div>}</div>
+  return <div className="uploader"><div className="form-row"><Field label="Year" name="archive-year" value={year} onChange={e=>setYear(e.target.value)}/><label><span>Month</span><select value={month} onChange={e=>setMonth(e.target.value)}>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{new Date(2000,i,1).toLocaleDateString('en-IN',{month:'long'})}</option>)}</select></label></div><label><span>Event name</span><input value={eventName} onChange={e=>setEventName(e.target.value)} placeholder="e.g. Community Kickoff"/></label><label><span>Caption (optional)</span><input value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Short description for all uploaded images"/></label><label className="dropzone"><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e=>setFiles(Array.from(e.target.files||[]))}/><span>DROP IMAGES OR CLICK</span><small>JPG / PNG / WEBP ï¿½?ï¿½ 10 MB MAX</small></label>{files.length>0&&<div className="file-list">{files.map(f=><span key={f.name}>{f.name}</span>)}</div>}<button className="btn btn-primary" onClick={upload} disabled={busy}>{busy?'Uploadingï¿½?ï¿½':'Upload to archive'}</button>{msg&&<div className="alert">{msg}</div>}</div>
 }
 
 function Admin(){
@@ -711,23 +823,24 @@ function Admin(){
 
   if(!supabaseConfigured||!supabase)return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ADMIN / SETUP</span><h1>Supabase is not connected.</h1><p>Set the Vite Supabase environment variables in Vercel before using archive administration.</p></div></main>;
 
-  if(!session)return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ADMIN / PRIVATE</span><h1>Archive control room.</h1><p>Sign in with the Supabase admin account you created. This page does not create users.</p></div><section className="section"><div className="wrap form-layout"><div className="guc-form"><label><span>Email</span><input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="username"/></label><label><span>Password</span><input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password"/></label>{status&&<div className="alert error">{status}</div>}<button className="btn btn-primary wide" onClick={login} disabled={busy}>{busy?'Signing in�?�':'Sign in ?'}</button></div></div></section></main>;
+  if(!session)return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ADMIN / PRIVATE</span><h1>Archive control room.</h1><p>Sign in with the Supabase admin account you created. This page does not create users.</p></div><section className="section"><div className="wrap form-layout"><div className="guc-form"><label><span>Email</span><input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="username"/></label><label><span>Password</span><input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password"/></label>{status&&<div className="alert error">{status}</div>}<button className="btn btn-primary wide" onClick={login} disabled={busy}>{busy?'Signing inï¿½?ï¿½':'Sign in ?'}</button></div></div></section></main>;
 
   return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ADMIN / ARCHIVE</span><h1>File the work.</h1><p>Upload images, assign them to a year/month/event, and remove mistakes without redeploying the site.</p><button className="crumb-btn" onClick={logout}>Log out</button></div><section className="section"><div className="wrap upload-panel"><div><span className="eyebrow">NEW ENTRY</span><h2>Send photos to Supabase.</h2><p>Each image gets a stable storage path and one metadata row. Public visitors only receive the archive rows and public image URLs.</p></div><ArchiveUploader/></div></section><section className="section"><div className="wrap"><div className="section-header"><span className="eyebrow">CURRENT FILES / {rows.length}</span><h2>Archive inventory</h2><p>Delete from here when an upload is wrong. Because apparently we still need a trash can for the internet.</p></div><div className="admin-list">{rows.map(row=><article key={row.id} className="admin-row"><img src={row.public_url} alt={row.caption||row.event_name}/><div><strong>{row.event_name}</strong><span>{row.year} / {new Date(2000,row.month-1,1).toLocaleDateString('en-IN',{month:'long'})}</span><small>{row.caption||'No caption'}</small></div><button className="ghost-btn" onClick={()=>remove(row)} disabled={busy}>Delete</button></article>)}{!rows.length&&<EmptyState text="No live archive images yet."/>}</div></div></section></main>
 }
 
-function EmptyState({text}:{text:string}){return <div className="empty-state"><span>�?</span><h3>Nothing filed yet</h3><p>{text}</p></div>}
+function EmptyState({text}:{text:string}){return <div className="empty-state"><span>ï¿½?</span><h3>Nothing filed yet</h3><p>{text}</p></div>}
 function NotFound(){usePageMeta('404 | Girl Up Conquistadors','Page not found.');return <main className="page notfound"><div className="wrap"><span className="eyebrow">404 / SIGNAL LOST</span><h1>That page wandered off.</h1><p>The link exists only in the great bureaucratic afterlife of broken URLs.</p><Link className="btn btn-primary" to="/">Return home ?</Link></div></main>}
 
 class ErrorBoundary extends React.Component<{children:React.ReactNode},{hasError:boolean}>{
   state={hasError:false};
   static getDerivedStateFromError(){return {hasError:true};}
-  render(){return this.state.hasError?<main className="page notfound"><div className="wrap"><span className="eyebrow">SYSTEM / RECOVERABLE ERROR</span><h1>Something broke.</h1><p>The page hit an unexpected error. Reloading the page should restore the interface.</p><button className="btn btn-primary" onClick={()=>location.reload()}>Reload ↻</button></div></main>:this.props.children;}
+  render(){return this.state.hasError?<main className="page notfound"><div className="wrap"><span className="eyebrow">SYSTEM / RECOVERABLE ERROR</span><h1>Something broke.</h1><p>The page hit an unexpected error. Reloading the page should restore the interface.</p><button className="btn btn-primary" onClick={()=>location.reload()}>Reload â†»</button></div></main>:this.props.children;}
 }
 
 function App(){return <Layout><Routes><Route path="/" element={<Home/>}/><Route path="/about" element={<About/>}/><Route path="/join" element={<Join/>}/><Route path="/events" element={<EventsPage/>}/><Route path="/donate" element={<Donate/>}/><Route path="/archive" element={<Archive/>}/><Route path="/admin" element={<Admin/>}/><Route path="*" element={<NotFound/>}/></Routes></Layout>}
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><ErrorBoundary><App/></ErrorBoundary></BrowserRouter></React.StrictMode>);
+
 
 
 
