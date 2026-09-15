@@ -156,8 +156,259 @@ function EventCard({ev}:{ev:GucEvent}){const date=new Date(ev.date+'T12:00:00');
 function About(){usePageMeta('About | Girl Up Conquistadors','Mission, history, values, and contact location for Girl Up Conquistadors.');return <main className="page"><div className="wrap page-hero"><span className="eyebrow">ABOUT / GUC</span><h1>We believe girls are not a “future constituency”. They are the present.</h1><p>GUC exists to turn that premise into infrastructure: skills, peer networks, mentors, safe spaces, and community-led action.</p></div><section className="section"><div className="wrap split"><SectionHeader eyebrow="MISSION" title="Build power that lasts beyond one campaign." copy="Our work connects learning with action. A workshop should lead somewhere. A campaign should leave skills behind. And every programme should make it easier for girls to claim space in rooms that were not designed with them in mind."/><div className="big-quote">“The objective is not to create louder girls. It is to create girls who know they do not need permission.”</div></div></section><section className="section dark-band"><div className="wrap"><SectionHeader eyebrow="HISTORY / A LIVING TIMELINE" title="From a small circle to a civic platform." copy="Use the timeline below as the editable narrative of GUC's growth."/><div className="timeline"><Timeline year="01" title="The first circle" text="A small group begins by pooling skills, contacts, and a willingness to do the unglamorous work."/><Timeline year="02" title="Programmes emerge" text="Education, leadership, safety, and community action become repeatable programme tracks."/><Timeline year="03" title="Community network" text="Partners, mentors, volunteers, and young organisers turn individual efforts into a wider network."/><Timeline year="04" title="The next chapter" text="GUC scales the archive, event programme, and volunteer base without losing the human core."/></div></div></section><section className="section"><div className="wrap"><SectionHeader eyebrow="LOCATION" title="Meetings happen somewhere. Configure the exact pin before launch." copy="The embedded map below is deliberately a placeholder so a real address is never fabricated."/><div className="map-placeholder"><div className="map-grid"/><div className="map-pin">✦</div><div className="map-label"><strong>{SITE.locationLabel}</strong><span>{SITE.locationAddress}</span></div></div></div></section><section className="section"><div className="wrap cards-3"><Info title="Dignity first" text="People are not programme outputs. Every interaction should respect autonomy, privacy, and choice."/><Info title="Youth-led" text="Young people help set priorities, run activities, and shape what gets built next."/><Info title="Evidence + imagination" text="We value measurement, but we refuse to confuse neat dashboards with actual change."/></div></section></main>}
 function Timeline({year,title,text}:{year:string;title:string;text:string}){return <div className="timeline-item"><span>{year}</span><div><h3>{title}</h3><p>{text}</p></div></div>}
 function Info({title,text}:{title:string;text:string}){return <article className="info-card"><span className="card-num">×</span><h3>{title}</h3><p>{text}</p></article>}
+function Join() {
+  usePageMeta(
+    'Join Us | Girl Up Conquistadors',
+    'Apply to volunteer or contribute your skills to Girl Up Conquistadors.'
+  );
 
-function Join(){usePageMeta('Join Us | Girl Up Conquistadors','Apply to volunteer or contribute your skills to Girl Up Conquistadors.');const [status,setStatus]=useState<'idle'|'loading'|'success'|'error'>('idle');const [error,setError]=useState(''); const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setError('');setStatus('loading');const f=new FormData(e.currentTarget);try{const r=await fetch('/api/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(f.entries()))});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||'We could not send your application.');setStatus('success');e.currentTarget.reset();}catch(err){setError(err instanceof Error?err.message:'Something went wrong.');setStatus('error');}};return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">JOIN / GUC</span><h1>Bring a skill. Bring a question. Bring a point of view.</h1><p>Tell us where you want to plug in. The form is wired for a Vercel serverless email endpoint.</p></div><section className="section"><div className="wrap form-layout"><form className="guc-form" onSubmit={submit} noValidate><div className="form-row"><Field label="Full name" name="name" required/><Field label="Email" name="email" type="email" required/><Field label="Phone" name="phone" required/></div><div className="form-row"><Field label="Age / date of birth" name="dob" required/><Field label="City" name="city" required/><Field label="Student / occupation" name="occupation" required/></div><div className="form-row"><label><span>Areas of interest</span><select name="interest" required><option value="">Choose one</option><option>Education</option><option>Leadership</option><option>Health & dignity</option><option>Campaigns</option><option>Media & design</option><option>Operations</option><option>Fundraising</option></select></label><label><span>Availability</span><select name="availability" required><option value="">Choose one</option><option>2–4 hrs / month</option><option>5–8 hrs / month</option><option>8+ hrs / month</option><option>Project based</option></select></label></div><label><span>Relevant experience</span><textarea name="experience" rows={4} placeholder="A few lines about what you have built, organised, studied, or learned." required/></label><label><span>Why do you want to join?</span><textarea name="why" rows={5} required/></label><label className="honeypot" aria-hidden="true"><span>Website</span><input name="website" tabIndex={-1} autoComplete="off"/></label><label className="check"><input type="checkbox" name="consent" value="yes" required/><span>I agree that GUC may contact me regarding volunteering and programme opportunities.</span></label>{status==='error'&&<div className="alert error">{error}</div>}{status==='success'&&<div className="alert success">Application sent. The inbox has been notified.</div>}<button className="btn btn-primary wide" disabled={status==='loading'}>{status==='loading'?'Sending…':'Submit application ↗'}</button><small className="form-note">Destination email is configured by <code>CONTACT_EMAIL</code> on Vercel. Never put that secret in client-side code.</small></form><aside className="side-note"><span className="eyebrow">WHAT HAPPENS NEXT</span><ol><li>We read your application.</li><li>We match interests to current work.</li><li>We get in touch using the details you provided.</li></ol><div className="contact-block"><span>Email</span><a href={`mailto:${SITE.email}`}>{SITE.email}</a><span>Phone</span><a href={`tel:${SITE.phone}`}>{SITE.phone}</a></div></aside></div></section></main>}
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [error, setError] = useState('');
+
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    setError('');
+    setStatus('loading');
+
+    // Capture the form element before the async request.
+    // React's event target may no longer be available after await.
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    try {
+      const r = await fetch('/api/join', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(Object.fromEntries(formData.entries())),
+      });
+
+      const data = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        throw new Error(
+          data.error || 'We could not send your application.'
+        );
+      }
+
+      // Reset the captured form safely after a successful submission.
+      form.reset();
+      setStatus('success');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Something went wrong. Please try again.'
+      );
+      setStatus('error');
+    }
+  };
+
+  return (
+    <main className="page">
+      <div className="wrap page-hero compact">
+        <span className="eyebrow">JOIN / GUC</span>
+
+        <h1>
+          Bring a skill. Bring a question. Bring a point of view.
+        </h1>
+
+        <p>
+          Tell us where you want to plug in. The form is wired for a Vercel
+          serverless email endpoint.
+        </p>
+      </div>
+
+      <section className="section">
+        <div className="wrap form-layout">
+          <form
+            className="guc-form"
+            onSubmit={submit}
+            noValidate
+          >
+            <div className="form-row">
+              <Field
+                label="Full name"
+                name="name"
+                required
+              />
+
+              <Field
+                label="Email"
+                name="email"
+                type="email"
+                required
+              />
+
+              <Field
+                label="Phone"
+                name="phone"
+                required
+              />
+            </div>
+
+            <div className="form-row">
+              <Field
+                label="Age / date of birth"
+                name="dob"
+                required
+              />
+
+              <Field
+                label="City"
+                name="city"
+                required
+              />
+
+              <Field
+                label="Student / occupation"
+                name="occupation"
+                required
+              />
+            </div>
+
+            <div className="form-row">
+              <label>
+                <span>Areas of interest</span>
+
+                <select name="interest" required>
+                  <option value="">Choose one</option>
+                  <option>Education</option>
+                  <option>Leadership</option>
+                  <option>Health & dignity</option>
+                  <option>Campaigns</option>
+                  <option>Media & design</option>
+                  <option>Operations</option>
+                  <option>Fundraising</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Availability</span>
+
+                <select name="availability" required>
+                  <option value="">Choose one</option>
+                  <option>2–4 hrs / month</option>
+                  <option>5–8 hrs / month</option>
+                  <option>8+ hrs / month</option>
+                  <option>Project based</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>Relevant experience</span>
+
+              <textarea
+                name="experience"
+                rows={4}
+                placeholder="A few lines about what you have built, organised, studied, or learned."
+                required
+              />
+            </label>
+
+            <label>
+              <span>Why do you want to join?</span>
+
+              <textarea
+                name="why"
+                rows={5}
+                required
+              />
+            </label>
+
+            <label
+              className="honeypot"
+              aria-hidden="true"
+            >
+              <span>Website</span>
+
+              <input
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </label>
+
+            <label className="check">
+              <input
+                type="checkbox"
+                name="consent"
+                value="yes"
+                required
+              />
+
+              <span>
+                I agree that GUC may contact me regarding volunteering and
+                programme opportunities.
+              </span>
+            </label>
+
+            {status === 'error' && (
+              <div
+                className="alert error"
+                role="alert"
+              >
+                {error}
+              </div>
+            )}
+
+            {status === 'success' && (
+              <div
+                className="alert success"
+                role="status"
+              >
+                Application sent. The inbox has been notified.
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="btn btn-primary wide"
+              disabled={status === 'loading'}
+            >
+              {status === 'loading'
+                ? 'Sending…'
+                : 'Submit application ↗'}
+            </button>
+
+            <small className="form-note">
+              Destination email is configured by{' '}
+              <code>CONTACT_EMAIL</code> on Vercel. Never put that secret in
+              client-side code.
+            </small>
+          </form>
+
+          <aside className="side-note">
+            <span className="eyebrow">WHAT HAPPENS NEXT</span>
+
+            <ol>
+              <li>We read your application.</li>
+              <li>We match interests to current work.</li>
+              <li>We get in touch using the details you provided.</li>
+            </ol>
+
+            <div className="contact-block">
+              <span>Email</span>
+
+              <a href={`mailto:${SITE.email}`}>
+                {SITE.email}
+              </a>
+
+              <span>Phone</span>
+
+              <a href={`tel:${SITE.phone}`}>
+                {SITE.phone}
+              </a>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  );
+}
 function Field({label,name,type='text',required=false}:{label:string;name:string;type?:string;required?:boolean}){return <label><span>{label}{required?' *':''}</span><input name={name} type={type} required={required}/></label>}
 
 function EventsPage(){usePageMeta('Events | Girl Up Conquistadors','Interactive calendar of Girl Up Conquistadors planned events.');const [cursor,setCursor]=useState(new Date());const [selected,setSelected]=useState<GucEvent|null>(null);const y=cursor.getFullYear(),m=cursor.getMonth();const monthName=cursor.toLocaleDateString('en-IN',{month:'long',year:'numeric'});const first=new Date(y,m,1).getDay();const days=new Date(y,m+1,0).getDate();const cells=Array.from({length:Math.ceil((first+days)/7)*7},(_,i)=>{const d=i-first+1;return d>0&&d<=days?d:null});const map=useMemo(()=>new Map(EVENTS.map(e=>[e.date,e])),[]);return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">EVENT GRID / CALENDAR</span><h1>Dates with intent.</h1><p>Choose a day with an event marker. A compact detail window gives the overview and tentative location.</p></div><section className="section"><div className="wrap calendar-shell"><div className="calendar-head"><button className="icon-btn" onClick={()=>setCursor(new Date(y,m-1,1))} aria-label="Previous month">‹</button><h2>{monthName}</h2><div className="calendar-head-actions"><button className="ghost-btn" onClick={()=>setCursor(new Date())}>Today</button><button className="icon-btn" onClick={()=>setCursor(new Date(y,m+1,1))} aria-label="Next month">›</button></div></div><div className="week-row">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><span key={d}>{d}</span>)}</div><div className="calendar-grid">{cells.map((day,i)=>{const dateStr=day?`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`:'';const ev=day?map.get(dateStr):undefined;return <button key={i} className={day?'day-cell':'day-cell empty'} disabled={!day} onClick={()=>ev&&setSelected(ev)}>{day&&<><span className="day-num">{day}</span>{ev&&<span className="event-dot"/>}{ev&&<span className="day-title">{ev.title}</span>}</>}</button>})}</div></div></section>{selected&&<Modal onClose={()=>setSelected(null)}><EventModal ev={selected}/></Modal>}</main>}
