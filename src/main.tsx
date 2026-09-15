@@ -424,56 +424,210 @@ type ArchiveRow={id:string;year:number;month:number;event_name:string;storage_pa
 
 function Archive(){
   usePageMeta('Archive | Girl Up Conquistadors','Browse the Girl Up Conquistadors digital archive by year, month, and event.');
-  const [years,setYears]=useState<ArchiveYear[]>([]),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState('');
-  const [year,setYear]=useState<string|null>(null),[month,setMonth]=useState<{year:string;month:string}|null>(null),[event,setEvent]=useState<{year:string;month:string;event:string}|null>(null),[lightbox,setLightbox]=useState<string|null>(null);
+  const [years,setYears]=useState<ArchiveYear[]>([]);
+  const [loading,setLoading]=useState(true);
+  const [loadError,setLoadError]=useState('');
+  const [year,setYear]=useState<string|null>(null);
+  const [month,setMonth]=useState<{year:string;month:string}|null>(null);
+  const [event,setEvent]=useState<{year:string;month:string;event:string}|null>(null);
+  const [lightbox,setLightbox]=useState<string|null>(null);
 
   useEffect(()=>{
     let alive=true;
     const load=async()=>{
+      setLoading(true);
+      setLoadError('');
+
       if(!supabaseConfigured||!supabase){
-        if(alive){setYears(DEMO_ARCHIVE);setLoading(false);setLoadError('')}
+        if(alive){
+          setYears(DEMO_ARCHIVE);
+          setLoading(false);
+          setLoadError('Supabase is not configured in this deployment. Showing the built-in preview.');
+        }
         return;
       }
-      const {data,error}=await supabase.from('archive_images').select('id,year,month,event_name,storage_path,public_url,caption,created_at').order('year',{ascending:false}).order('month',{ascending:false}).order('created_at',{ascending:true});
+
+      const {data,error}=await supabase
+        .from('archive_images')
+        .select('id,year,month,event_name,storage_path,public_url,caption,created_at')
+        .order('year',{ascending:false})
+        .order('month',{ascending:false})
+        .order('created_at',{ascending:true});
+
       if(error){
-        if(alive){setYears(DEMO_ARCHIVE);setLoading(false);setLoadError('Live archive is temporarily unavailable. Showing the built-in preview.')}
+        if(alive){
+          setYears([]);
+          setLoading(false);
+          setLoadError(`Could not load the live archive: ${error.message}`);
+        }
         return;
       }
+
       const grouped=new Map<string,ArchiveYear>();
-      for(const row of data||[]){
-        const ys=String(row.year),ms=new Date(2000,Number(row.month)-1,1).toLocaleDateString('en-IN',{month:'long'});
+
+      for(const row of (data||[])){
+        const ys=String(row.year);
+        const ms=new Date(2000,Number(row.month)-1,1).toLocaleDateString('en-IN',{month:'long'});
+
         let y=grouped.get(ys);
-        if(!y){y={year:ys,months:[]};grouped.set(ys,y)}
+        if(!y){
+          y={year:ys,months:[]};
+          grouped.set(ys,y);
+        }
+
         let m=y.months.find(v=>v.month===ms);
-        if(!m){m={month:ms,events:[]};y.months.push(m)}
-        const id=row.event_name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+        if(!m){
+          m={month:ms,events:[]};
+          y.months.push(m);
+        }
+
+        const id=row.event_name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g,'-')
+          .replace(/(^-|-$)/g,'');
+
         let ev=m.events.find(v=>v.id===id);
-        if(!ev){ev={id,name:row.event_name,images:[]};m.events.push(ev)}
-        ev.images.push({id:row.id,src:row.public_url,alt:row.caption||`${row.event_name} archive image`})
+        if(!ev){
+          ev={id,name:row.event_name,images:[]};
+          m.events.push(ev);
+        }
+
+        let src=String(row.public_url||'');
+        if(!src && row.storage_path){
+          src=supabase.storage.from('guc-archive').getPublicUrl(row.storage_path).data.publicUrl;
+        }
+
+        if(src){
+          ev.images.push({
+            id:String(row.id),
+            src,
+            alt:row.caption||`${row.event_name} archive image`
+          });
+        }
       }
+
       const live=Array.from(grouped.values()).sort((a,b)=>Number(b.year)-Number(a.year));
-      if(alive){setYears(live);setLoading(false);setLoadError('')}
+
+      if(alive){
+        setYears(live);
+        setLoading(false);
+      }
     };
+
     load();
-    return()=>{alive=false}
+    return()=>{alive=false};
   },[]);
 
-  if(loading)return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ARCHIVE / LOADING</span><h1>Opening the filing cabinet.</h1><p>Fetching the live archive. Humanity has invented databases, so we may as well use one.</p></div></main>;
+  if(loading){
+    return <main className="page"><div className="wrap page-hero compact">
+      <span className="eyebrow">ARCHIVE / LOADING</span>
+      <h1>Opening the filing cabinet.</h1>
+      <p>Fetching the live archive.</p>
+    </div></main>;
+  }
 
   if(event){
-    const y=years.find(v=>v.year===event.year),mo=y?.months.find(v=>v.month===event.month),ev=mo?.events.find(v=>v.id===event.event);
-    return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ARCHIVE / EVENT</span><h1>{ev?.name||'Event'}</h1><p><button className="crumb-btn" onClick={()=>setEvent(null)}>â† Back to {event.month}</button></p></div><section className="section"><div className="wrap">{loadError&&<div className="alert warning">{loadError}</div>}<div className="archive-photo-grid">{ev?.images.length?ev.images.map(img=><button key={img.id} className="archive-photo" onClick={()=>setLightbox(img.src)}><img src={img.src} alt={img.alt} loading="lazy"/><span>VIEW</span></button>):<EmptyState text="No photos have been added to this event yet."/>}</div></div></section>{lightbox&&<Modal onClose={()=>setLightbox(null)}><img className="lightbox-img" src={lightbox} alt="Archive enlargement"/></Modal>}</main>
+    const y=years.find(v=>v.year===event.year);
+    const mo=y?.months.find(v=>v.month===event.month);
+    const ev=mo?.events.find(v=>v.id===event.event);
+
+    return <main className="page">
+      <div className="wrap page-hero compact">
+        <span className="eyebrow">ARCHIVE / EVENT</span>
+        <h1>{ev?.name||'Event'}</h1>
+        <p><button className="crumb-btn" onClick={()=>setEvent(null)}>â† Back to {event.month}</button></p>
+      </div>
+      <section className="section">
+        <div className="wrap">
+          {loadError&&<div className="alert warning">{loadError}</div>}
+          <div className="archive-photo-grid">
+            {ev?.images.length
+              ? ev.images.map(img=><button key={img.id} className="archive-photo" onClick={()=>setLightbox(img.src)}>
+                  <img src={img.src} alt={img.alt} loading="lazy"/>
+                  <span>VIEW</span>
+                </button>)
+              : <EmptyState text="No photos have been added to this event yet."/>
+            }
+          </div>
+        </div>
+      </section>
+      {lightbox&&<Modal onClose={()=>setLightbox(null)}><img className="lightbox-img" src={lightbox} alt="Archive enlargement"/></Modal>}
+    </main>
   }
 
   if(month){
-    const y=years.find(v=>v.year===month.year),mo=y?.months.find(v=>v.month===month.month);
-    return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ARCHIVE / {month.year}</span><h1>{month.month}</h1><p><button className="crumb-btn" onClick={()=>setMonth(null)}>â† Back to {month.year}</button></p></div><section className="section"><div className="wrap archive-folders">{mo?.events.map(ev=><button key={ev.id} className="folder-card" onClick={()=>setEvent({year:month.year,month:month.month,event:ev.id})}><span className="folder-tab"/><span className="folder-icon">â–±</span><strong>{ev.name}</strong><small>{ev.images.length} image{ev.images.length===1?'':'s'}</small></button>)}{!mo?.events.length&&<EmptyState text="No events have been filed for this month."/>}</div></section></main>
+    const y=years.find(v=>v.year===month.year);
+    const mo=y?.months.find(v=>v.month===month.month);
+
+    return <main className="page">
+      <div className="wrap page-hero compact">
+        <span className="eyebrow">ARCHIVE / {month.year}</span>
+        <h1>{month.month}</h1>
+        <p><button className="crumb-btn" onClick={()=>setMonth(null)}>â† Back to {month.year}</button></p>
+      </div>
+      <section className="section">
+        <div className="wrap archive-folders">
+          {mo?.events.map(ev=><button key={ev.id} className="folder-card" onClick={()=>setEvent({year:month.year,month:month.month,event:ev.id})}>
+            <span className="folder-tab"/>
+            <span className="folder-icon">â–±</span>
+            <strong>{ev.name}</strong>
+            <small>{ev.images.length} image{ev.images.length===1?'':'s'}</small>
+          </button>)}
+          {!mo?.events.length&&<EmptyState text="No events have been filed for this month."/>}
+        </div>
+      </section>
+    </main>
   }
 
   const currentYear=year&&years.find(y=>y.year===year);
-  return <main className="page"><div className="wrap page-hero compact"><span className="eyebrow">ARCHIVE / MEMORY AS INFRASTRUCTURE</span><h1>Every campaign leaves a trail.</h1><p>Browse the archive like a filing cabinet from the future. Years â†’ months â†’ events â†’ images.</p></div><section className="section"><div className="wrap">{loadError&&<div className="alert warning">{loadError}</div>}<div className="archive-folders">{year===null?years.map(y=><button key={y.year} className="folder-card year" onClick={()=>{setYear(y.year);setMonth(null)}}><span className="folder-tab"/><span className="folder-icon">â–±</span><strong>{y.year}</strong><small>{y.months.length} month{y.months.length===1?'':'s'} filed</small></button>):<><div className="archive-back"><button className="crumb-btn" onClick={()=>setYear(null)}>â† All years</button></div>{currentYear?.months.map(mo=><button key={mo.month} className="folder-card" onClick={()=>setMonth({year,month:mo.month})}><span className="folder-tab"/><span className="folder-icon">â–±</span><strong>{mo.month}</strong><small>{mo.events.length} event{mo.events.length===1?'':'s'}</small></button>)}</>}</div></div></section><section className="section"><div className="wrap callout"><div><span className="eyebrow">ARCHIVE ADMIN</span><h2>Photos live outside Vercel.</h2><p>Uploads and event metadata are managed from the private admin panel.</p></div><Link to="/admin" className="btn btn-primary">Open admin â†—</Link></div></section></main>
-}
 
+  return <main className="page">
+    <div className="wrap page-hero compact">
+      <span className="eyebrow">ARCHIVE / MEMORY AS INFRASTRUCTURE</span>
+      <h1>Every campaign leaves a trail.</h1>
+      <p>Browse the archive like a filing cabinet from the future. Years â†’ months â†’ events â†’ images.</p>
+    </div>
+
+    <section className="section">
+      <div className="wrap">
+        {loadError&&<div className="alert warning">{loadError}</div>}
+        {!years.length&&!loadError&&<EmptyState text="No archive images have been uploaded yet."/>}
+        {!!years.length&&<div className="archive-folders">
+          {year===null
+            ? years.map(y=><button key={y.year} className="folder-card year" onClick={()=>{setYear(y.year);setMonth(null)}}>
+                <span className="folder-tab"/>
+                <span className="folder-icon">â–±</span>
+                <strong>{y.year}</strong>
+                <small>{y.months.length} month{y.months.length===1?'':'s'} filed</small>
+              </button>)
+            : <>
+                <div className="archive-back">
+                  <button className="crumb-btn" onClick={()=>setYear(null)}>â† All years</button>
+                </div>
+                {currentYear?.months.map(mo=><button key={mo.month} className="folder-card" onClick={()=>setMonth({year,month:mo.month})}>
+                  <span className="folder-tab"/>
+                  <span className="folder-icon">â–±</span>
+                  <strong>{mo.month}</strong>
+                  <small>{mo.events.length} event{mo.events.length===1?'':'s'}</small>
+                </button>)}
+              </>
+          }
+        </div>}
+      </div>
+    </section>
+
+    <section className="section">
+      <div className="wrap callout">
+        <div>
+          <span className="eyebrow">ARCHIVE ADMIN</span>
+          <h2>Photos live outside Vercel.</h2>
+          <p>Uploads and event metadata are managed from the private admin panel.</p>
+        </div>
+        <Link to="/admin" className="btn btn-primary">Open admin â†—</Link>
+      </div>
+    </section>
+  </main>
+}
 function ArchiveUploader(){
   const [year,setYear]=useState(String(new Date().getFullYear())),[month,setMonth]=useState(String(new Date().getMonth()+1)),[eventName,setEventName]=useState(''),[caption,setCaption]=useState(''),[files,setFiles]=useState<File[]>([]),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false);
 
@@ -560,5 +714,6 @@ class ErrorBoundary extends React.Component<{children:React.ReactNode},{hasError
 function App(){return <Layout><Routes><Route path="/" element={<Home/>}/><Route path="/about" element={<About/>}/><Route path="/join" element={<Join/>}/><Route path="/events" element={<EventsPage/>}/><Route path="/donate" element={<Donate/>}/><Route path="/archive" element={<Archive/>}/><Route path="/admin" element={<Admin/>}/><Route path="*" element={<NotFound/>}/></Routes></Layout>}
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><ErrorBoundary><App/></ErrorBoundary></BrowserRouter></React.StrictMode>);
+
 
 
