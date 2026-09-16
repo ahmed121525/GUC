@@ -1,168 +1,93 @@
-﻿/* Performance layer: keeps the visual depth while reducing continuous paint/layout work. */
+/* Performance layer for the visual atmosphere. */
 
-/* Let the browser skip rendering large off-screen sections. */
+body{
+  overscroll-behavior-x:none;
+}
+
 .section,
 .dark-band,
 .footer{
   content-visibility:auto;
-  contain-intrinsic-size:700px;
+  contain-intrinsic-size:720px;
 }
 
-/* Isolate the fixed atmosphere and particle canvas from normal page rendering. */
-.ambient-art,
-.particles{
+.ambient-art{
   contain:layout paint style;
+  pointer-events:none;
 }
 
-.particles{
-  opacity:.52;
-  transform:translateZ(0);
-  will-change:contents;
+.ambient-orbit,
+.ambient-blob,
+.ambient-grid,
+.ambient-noise,
+.ambient-scanline,
+.ambient-cross,
+.ambient-star,
+.ambient-ring-core,
+.ambient-diamond{
+  backface-visibility:hidden;
 }
 
-/* The conic glow is visually rich but expensive to blur and animate. */
+.site-header{
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+
+.map-label{
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+}
+
 .hero-card:before{
-  filter:blur(7px);
-  animation-duration:26s;
+  filter:blur(6px);
+  animation-duration:28s;
   will-change:transform;
 }
 
 .scanline{
-  animation-duration:9s;
+  animation-duration:10s;
 }
 
-/* The large radial gradients already provide the softness, so use a smaller blur radius. */
 .hero-orb{
-  filter:blur(4px);
+  filter:blur(3px);
 }
 
-/* Keep glass depth, but reduce the amount of backdrop work. */
-.site-header{
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-}
-
-.map-label{
-  backdrop-filter:blur(6px);
-  -webkit-backdrop-filter:blur(6px);
-}
-
-/* Cheap, compositor-friendly movement. */
 .hero-card,
 .hero-orb,
 .hero-slab,
 .hero-rings,
 .ambient-orbit,
 .ambient-blob{
-  backface-visibility:hidden;
   transform:translateZ(0);
 }
 
-/* Smooth but restrained cursor. */
-html.cursor-enabled,
-html.cursor-enabled body,
-html.cursor-enabled *{
-  cursor:none !important;
-}
+/* Simple native custom cursor. */
+@media (pointer:fine){
+  html,
+  body,
+  a,
+  button,
+  input,
+  textarea,
+  select,
+  [role="button"]{
+    cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='5' fill='%23090507' stroke='%23ff2b8b' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='12' r='1.6' fill='%23ffffff'/%3E%3C/svg%3E") 12 12, auto;
+  }
 
-.cursor-system{
-  position:fixed;
-  left:0;
-  top:0;
-  width:34px;
-  height:34px;
-  z-index:99999;
-  pointer-events:none;
-  transform:translate3d(-100px,-100px,0);
-  will-change:transform;
-  contain:layout paint;
-}
-
-.cursor-ring{
-  position:absolute;
-  inset:0;
-  border:1px solid rgba(255,105,165,.62);
-  border-radius:50%;
-  background:rgba(255,43,139,.025);
-  box-shadow:0 0 18px rgba(255,43,139,.14);
-  transform:scale(.72);
-  transition:
-    transform .18s cubic-bezier(.2,.8,.2,1),
-    border-color .18s ease,
-    background .18s ease,
-    box-shadow .18s ease;
-}
-
-.cursor-dot{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:5px;
-  height:5px;
-  border-radius:50%;
-  background:#fff;
-  box-shadow:0 0 12px rgba(255,43,139,.8);
-  transform:translate(-50%,-50%);
-}
-
-.cursor-crosshair{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:100%;
-  height:100%;
-  transform:translate(-50%,-50%);
-  opacity:.5;
-}
-
-.cursor-crosshair:before,
-.cursor-crosshair:after{
-  content:"";
-  position:absolute;
-  background:rgba(255,255,255,.5);
-}
-
-.cursor-crosshair:before{
-  left:50%;
-  top:4px;
-  bottom:4px;
-  width:1px;
-  transform:translateX(-50%);
-}
-
-.cursor-crosshair:after{
-  top:50%;
-  left:4px;
-  right:4px;
-  height:1px;
-  transform:translateY(-50%);
-}
-
-.cursor-system.is-hover .cursor-ring{
-  transform:scale(1.18);
-  border-color:rgba(255,43,139,.9);
-  background:rgba(255,43,139,.055);
-  box-shadow:0 0 24px rgba(255,43,139,.22);
-}
-
-.cursor-system.is-hover .cursor-dot{
-  transform:translate(-50%,-50%) scale(1.18);
-}
-
-.cursor-system.is-pressed .cursor-ring{
-  transform:scale(.58);
-}
-
-@media (max-width:900px){
-  .cursor-system{
-    display:none;
+  a:hover,
+  button:hover,
+  [role="button"]:hover{
+    cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Ccircle cx='13' cy='13' r='8' fill='%23090507' stroke='%23ff3d4f' stroke-width='1.7'/%3E%3Ccircle cx='13' cy='13' r='2' fill='%23ffffff'/%3E%3C/svg%3E") 13 13, pointer;
   }
 }
 
 @media (prefers-reduced-motion:reduce){
   .hero-card:before,
   .scanline,
-  .marquee div{
+  .marquee div,
+  .ambient-orbit,
+  .ambient-blob,
+  .ambient-scanline{
     animation:none !important;
   }
 

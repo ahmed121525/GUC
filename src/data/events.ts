@@ -1,6 +1,5 @@
 export type EventCategory = 'Workshop' | 'Drive' | 'Meetup' | 'Fundraiser' | 'Campaign';
 export type GucEvent = { id:string; date:string; title:string; category:EventCategory; overview:string; location:string };
-// EDIT THIS FILE TO ADD / REMOVE EVENTS.
 export const EVENTS:GucEvent[]=[
 {id:'leadership-lab-oct',date:'2026-10-03',title:'Leadership Lab: Own the Room',category:'Workshop',overview:'A hands-on session on public speaking, negotiation, and taking up space without apology.',location:'GUC Studio / venue to be confirmed'},
 {id:'health-camp-oct',date:'2026-10-11',title:'Community Health & Dignity Drive',category:'Drive',overview:'A neighbourhood outreach day focused on menstrual health, dignity kits, and trusted referrals.',location:'Community centre, Kolkata'},
