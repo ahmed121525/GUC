@@ -1,0 +1,97 @@
+/* Performance layer for the visual atmosphere. */
+
+body{
+  overscroll-behavior-x:none;
+}
+
+.section,
+.dark-band,
+.footer{
+  content-visibility:auto;
+  contain-intrinsic-size:720px;
+}
+
+.ambient-art{
+  contain:layout paint style;
+  pointer-events:none;
+}
+
+.ambient-orbit,
+.ambient-blob,
+.ambient-grid,
+.ambient-noise,
+.ambient-scanline,
+.ambient-cross,
+.ambient-star,
+.ambient-ring-core,
+.ambient-diamond{
+  backface-visibility:hidden;
+}
+
+.site-header{
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+
+.map-label{
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+}
+
+.hero-card:before{
+  filter:blur(6px);
+  animation-duration:28s;
+  will-change:transform;
+}
+
+.scanline{
+  animation-duration:10s;
+}
+
+.hero-orb{
+  filter:blur(3px);
+}
+
+.hero-card,
+.hero-orb,
+.hero-slab,
+.hero-rings,
+.ambient-orbit,
+.ambient-blob{
+  transform:translateZ(0);
+}
+
+/* Simple native custom cursor. */
+@media (pointer:fine){
+  html,
+  body,
+  a,
+  button,
+  input,
+  textarea,
+  select,
+  [role="button"]{
+    cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='5' fill='%23090507' stroke='%23ff2b8b' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='12' r='1.6' fill='%23ffffff'/%3E%3C/svg%3E") 12 12, auto;
+  }
+
+  a:hover,
+  button:hover,
+  [role="button"]:hover{
+    cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Ccircle cx='13' cy='13' r='8' fill='%23090507' stroke='%23ff3d4f' stroke-width='1.7'/%3E%3Ccircle cx='13' cy='13' r='2' fill='%23ffffff'/%3E%3C/svg%3E") 13 13, pointer;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .hero-card:before,
+  .scanline,
+  .marquee div,
+  .ambient-orbit,
+  .ambient-blob,
+  .ambient-scanline{
+    animation:none !important;
+  }
+
+  .btn{
+    transition:none !important;
+  }
+}
