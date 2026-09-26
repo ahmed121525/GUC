@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
@@ -23,29 +23,78 @@ function AmbientBackground(){return <div className="ambient-art" aria-hidden="tr
 
 function CustomCursor(){
   const root=useRef<HTMLDivElement|null>(null);
+  const dot=useRef<HTMLDivElement|null>(null);
+  const ring=useRef<HTMLDivElement|null>(null);
+
   useEffect(()=>{
     if(!window.matchMedia('(pointer:fine)').matches) return;
-    const el=root.current; if(!el) return;
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const rootEl=root.current;
+    const dotEl=dot.current;
+    const ringEl=ring.current;
+
+    if(!rootEl || !dotEl || !ringEl) return;
+
     const html=document.documentElement;
-    let raf=0, x=0, y=0, nextX=0, nextY=0;
-    const render=()=>{
-      x=nextX; y=nextY;
-      el.style.transform=`translate3d(${x}px,${y}px,0)`;
-      raf=0;
+
+    let targetX=-100;
+    let targetY=-100;
+    let dotX=-100;
+    let dotY=-100;
+    let ringX=-100;
+    let ringY=-100;
+    let raf=0;
+
+    const tick=()=>{
+      dotX+=(targetX-dotX)*0.55;
+      dotY+=(targetY-dotY)*0.55;
+
+      ringX+=(targetX-ringX)*0.16;
+      ringY+=(targetY-ringY)*0.16;
+
+      dotEl.style.transform=
+        `translate3d(${dotX}px,${dotY}px,0) translate(-50%,-50%)`;
+
+      ringEl.style.transform=
+        `translate3d(${ringX}px,${ringY}px,0) translate(-50%,-50%)`;
+
+      raf=requestAnimationFrame(tick);
     };
+
     const move=(e:MouseEvent)=>{
-      nextX=e.clientX; nextY=e.clientY;
-      html.style.setProperty('--mouse-x',((e.clientX/window.innerWidth-.5)*2).toFixed(3));
-      html.style.setProperty('--mouse-y',((e.clientY/window.innerHeight-.5)*2).toFixed(3));
-      if(!raf) raf=requestAnimationFrame(render);
+      targetX=e.clientX;
+      targetY=e.clientY;
+
+      html.style.setProperty(
+        '--mouse-x',
+        ((e.clientX/window.innerWidth-.5)*2).toFixed(3)
+      );
+
+      html.style.setProperty(
+        '--mouse-y',
+        ((e.clientY/window.innerHeight-.5)*2).toFixed(3)
+      );
+
       const target=e.target instanceof Element ? e.target : null;
-      html.classList.toggle('cursor-hover', !!target?.closest('a,button,input,textarea,select,[role=button]'));
+
+      html.classList.toggle(
+        'cursor-hover',
+        !!target?.closest(
+          'a,button,input,textarea,select,[role=button],.event-card,.info-card,.stat,.folder-card,.archive-photo,.qr-card'
+        )
+      );
     };
+
     const down=()=>html.classList.add('cursor-pressed');
     const up=()=>html.classList.remove('cursor-pressed');
+
     window.addEventListener('mousemove',move,{passive:true});
     window.addEventListener('mousedown',down,{passive:true});
     window.addEventListener('mouseup',up,{passive:true});
+
+    raf=requestAnimationFrame(tick);
+
     return()=>{
       cancelAnimationFrame(raf);
       window.removeEventListener('mousemove',move);
@@ -54,9 +103,14 @@ function CustomCursor(){
       html.classList.remove('cursor-hover','cursor-pressed');
     };
   },[]);
-  return <div ref={root} className="cursor-system" aria-hidden="true"><div className="cursor-ring"/><div className="cursor-dot"/><div className="cursor-crosshair"/></div>
-}
 
+  return (
+    <div ref={root} className="cursor-redesign" aria-hidden="true">
+      <div ref={ring} className="cursor-redesign-ring"/>
+      <div ref={dot} className="cursor-redesign-dot"/>
+    </div>
+  );
+}
 function ScrollParallax(){
   useEffect(()=>{
     const root=document.documentElement;
@@ -143,7 +197,10 @@ function Home(){
     hero.addEventListener('pointermove',onMove,{passive:true});
     return()=>hero.removeEventListener('pointermove',onMove);
   },[]);
-  return <><main><section ref={heroRef} className="hero home-hero-reveal"><div className="hero-reveal-art"/><div className="hero-orb orb-a"/><div className="hero-orb orb-b"/><div className="hero-slab slab-a"/><div className="hero-slab slab-b"/><div className="hero-rings"/><div className="hero-wordmark">GUC//01</div><div className="wrap hero-inner"><div className="hero-copy"><span className="kicker">YOUTH-LED     IMPACT-DRIVEN     UNAPOLOGETIC</span><h1>Make room.<br/><em>Take space.</em><br/>Move the future.</h1><p>{SITE.tagline} We build practical pathways for girls and young women to learn, lead, organise, and change the rooms around them.</p><div className="hero-actions"><Link to="/join" className="btn btn-primary">Join the movement    </Link><Link to="/about" className="btn btn-ghost">Our story</Link></div><div className="micro-proof"><span>01 / education</span><span>02 / leadership</span><span>03 / community</span></div></div><div className="hero-card" data-parallax="0.08"><div className="hero-card-line"><span>FIELD NOTE 026</span><span>LIVE / ACTION</span></div><div className="hero-card-number">+<span>18</span></div><p>community actions scheduled across the next two quarters.</p><div className="scanline"/></div></div></section>
+  return <><main><section ref={heroRef} className="hero home-hero-reveal"><div className="hero-reveal-art"/><div className="hero-orb orb-a"/><div className="hero-orb orb-b"/><div className="hero-slab slab-a"/><div className="hero-slab slab-b"/><div className="hero-rings"/><div className="hero-wordmark">GUC//01</div><div className="wrap hero-inner"><div className="hero-copy"><span className="kicker">YOUTH-LED     IMPACT-DRIVEN     UNAPOLOGETIC</span><h1>Make room.<br/><em>Take space.</em><br/>Move the future.</h1><p>{SITE.tagline} We build practical pathways for girls and young women to learn, lead, organise, and change the rooms around them.</p><div className="hero-actions"><Link to="/join" className="btn btn-primary">Join the movement    </Link><Link to="/about" className="btn btn-ghost">Our story</Link></div><div className="micro-proof"><span>01 / education</span><span>02 / leadership</span><span>03 / community</span></div></div><div className="hero-card" data-parallax="0.08"><div className="hero-card-line"><span>FIELD NOTE 026</span><span>LIVE / ACTION</span></div><div className="hero-card-number">
+  <span className="hero-card-plus">+</span>
+  <span>18</span>
+</div><p>community actions scheduled across the next two quarters.</p><div className="scanline"/></div></div></section>
 <section className="marquee"><div>EDUCATION <b>   </b> LEADERSHIP <b>   </b> SAFETY <b>   </b> DIGNITY <b>   </b> OPPORTUNITY <b>   </b> EDUCATION <b>   </b></div></section>
 <section className="section"><div className="wrap stats-grid"><div className="stat"><strong>04</strong><span>core programme tracks</span></div><div className="stat"><strong>12+</strong><span>community partners, growing</span></div><div className="stat"><strong>1</strong><span>standard: girls deserve more</span></div></div></section>
 <section className="section section-tight"><div className="wrap split"><SectionHeader eyebrow="01 / WHY GUC" title="Not charity theatre. Capacity, confidence, and collective action." copy="We focus on tangible interventions that let girls build skills, access resources, and become decision-makers in their own communities."/><div className="manifesto"><div><span>A</span><h3>Agency</h3><p>Tools to speak, decide, negotiate, and lead.</p></div><div><span>B</span><h3>Access</h3><p>Education, mentors, information, and opportunity.</p></div><div><span>C</span><h3>Action</h3><p>Campaigns that move from conversation to measurable change.</p></div></div></div></section>
@@ -714,6 +771,11 @@ class ErrorBoundary extends React.Component<{children:React.ReactNode},{hasError
 function App(){return <Layout><Routes><Route path="/" element={<Home/>}/><Route path="/about" element={<About/>}/><Route path="/join" element={<Join/>}/><Route path="/events" element={<EventsPage/>}/><Route path="/donate" element={<Donate/>}/><Route path="/archive" element={<Archive/>}/><Route path="/admin" element={<Admin/>}/><Route path="*" element={<NotFound/>}/></Routes></Layout>}
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><ErrorBoundary><App/></ErrorBoundary></BrowserRouter></React.StrictMode>);
+
+
+
+
+
 
 
 
